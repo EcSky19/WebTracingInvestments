@@ -1,9 +1,12 @@
+import logging
 from datetime import datetime, timezone
 from typing import Iterable, List
 import praw
 
 from app.config import settings
 from app.ingest.base import RawItem, Adapter
+
+logger = logging.getLogger(__name__)
 
 class RedditAdapter(Adapter):
     """
@@ -26,23 +29,29 @@ class RedditAdapter(Adapter):
 
     def fetch(self) -> Iterable[RawItem]:
         for sr in self.subreddits:
-            subreddit = self.client.subreddit(sr)
-            # Choose one: .new(), .hot(), .top(time_filter="day")
-            for submission in subreddit.new(limit=self.limit):
-                created = datetime.fromtimestamp(submission.created_utc, tz=timezone.utc)
-                text = (submission.selftext or "").strip()
-                title = (submission.title or "").strip()
+            try:
+                subreddit = self.client.subreddit(sr)
+                post_count = 0
+                # Choose one: .new(), .hot(), .top(time_filter="day")
+                for submission in subreddit.new(limit=self.limit):
+                    created = datetime.fromtimestamp(submission.created_utc, tz=timezone.utc)
+                    text = (submission.selftext or "").strip()
+                    title = (submission.title or "").strip()
 
-                # Skip empty content posts (optional)
-                if not title and not text:
-                    continue
+                    # Skip empty content posts (optional)
+                    if not title and not text:
+                        continue
 
-                yield RawItem(
-                    source="reddit",
-                    source_id=submission.id,
-                    created_at=created,
-                    author=str(submission.author) if submission.author else None,
-                    url=f"https://www.reddit.com{submission.permalink}",
-                    title=title,
-                    text=(title + "\n\n" + text).strip(),
-                )
+                    post_count += 1
+                    yield RawItem(
+                        source="reddit",
+                        source_id=submission.id,
+                        created_at=created,
+                        author=str(submission.author) if submission.author else None,
+                        url=f"https://www.reddit.com{submission.permalink}",
+                        title=title,
+                        text=(title + "\n\n" + text).strip(),
+                    )
+                logger.info(f"Reddit r/{sr}: Fetched {post_count} posts")
+            except Exception as e:
+                logger.error(f"Reddit r/{sr}: Failed - {e}")

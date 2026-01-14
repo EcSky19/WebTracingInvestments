@@ -1,6 +1,9 @@
+import logging
 from datetime import datetime, timezone
 from sqlmodel import Session, select
 from app.db.models import Post, SentimentBucket
+
+logger = logging.getLogger(__name__)
 
 def floor_to_hour(dt: datetime) -> datetime:
     dt = dt.astimezone(timezone.utc)
@@ -44,6 +47,7 @@ def aggregate_hour(session: Session, hour_start: datetime):
         if existing:
             existing.post_count = len(vals)
             existing.avg_sentiment = avg
+            logger.debug(f"Updated {sym}: {len(vals)} posts, sentiment={avg:.3f}")
         else:
             session.add(SentimentBucket(
                 symbol=sym,
@@ -52,5 +56,7 @@ def aggregate_hour(session: Session, hour_start: datetime):
                 post_count=len(vals),
                 avg_sentiment=avg,
             ))
+            logger.debug(f"Created {sym}: {len(vals)} posts, sentiment={avg:.3f}")
 
     session.commit()
+    logger.info(f"Aggregated sentiment for {len(by_sym)} symbols in hour {hour_start}")

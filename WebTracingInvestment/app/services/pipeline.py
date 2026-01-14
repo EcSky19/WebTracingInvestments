@@ -1,9 +1,12 @@
+import logging
 from app.ingest.base import RawItem
 from app.db.models import Post
 from app.db.repo import upsert_post
 from app.nlp.entity import clean_text, detect_symbols
 from app.nlp.sentiment import score_sentiment
 from sqlmodel import Session
+
+logger = logging.getLogger(__name__)
 
 def process_item(session: Session, item: RawItem) -> bool:
     """
@@ -18,6 +21,8 @@ def process_item(session: Session, item: RawItem) -> bool:
         return False
 
     sent = score_sentiment(text_clean)
+    
+    logger.debug(f"[{item.source}:{item.author}] Symbols: {symbols} | Sentiment: {sent:.3f}")
 
     post = Post(
         source=item.source,
