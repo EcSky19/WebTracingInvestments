@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter
-from sqlmodel import select, func
+from sqlmodel import select
 
 from app.db.session import get_session
 from app.db.models import SentimentBucket, Post
@@ -42,21 +42,27 @@ def sentiment_distribution(symbol: str, hours: int = 24):
     symbol = symbol.upper()
 
     with get_session() as session:
+        # Get all posts and filter in Python since SQLite symbols are comma-separated
         posts = session.exec(
             select(Post).where(
                 Post.created_at >= start,
-                Post.symbols.contains(symbol),
                 Post.sentiment.isnot(None),
             )
         ).all()
 
-        very_negative = sum(1 for p in posts if p.sentiment <= -0.6)
-        negative = sum(1 for p in posts if -0.6 < p.sentiment <= -0.2)
-        neutral = sum(1 for p in posts if -0.2 < p.sentiment < 0.2)
-        positive = sum(1 for p in posts if 0.2 <= p.sentiment < 0.6)
-        very_positive = sum(1 for p in posts if p.sentiment >= 0.6)
+        # Filter for posts mentioning this symbol
+        relevant_posts = [
+            p for p in posts 
+            if symbol in [s.strip() for s in (p.symbols or "").split(",")]
+        ]
+
+        very_negative = sum(1 for p in relevant_posts if p.sentiment <= -0.6)
+        negative = sum(1 for p in relevant_posts if -0.6 < p.sentiment <= -0.2)
+        neutral = sum(1 for p in relevant_posts if -0.2 < p.sentiment < 0.2)
+        positive = sum(1 for p in relevant_posts if 0.2 <= p.sentiment < 0.6)
+        very_positive = sum(1 for p in relevant_posts if p.sentiment >= 0.6)
         
-        avg_sentiment = sum(p.sentiment for p in posts) / len(posts) if posts else 0.0
+        avg_sentiment = sum(p.sentiment for p in relevant_posts) / len(relevant_posts) if relevant_posts else 0.0
 
         return SentimentDistribution(
             symbol=symbol,
@@ -65,7 +71,7 @@ def sentiment_distribution(symbol: str, hours: int = 24):
             neutral=neutral,
             positive=positive,
             very_positive=very_positive,
-            total_posts=len(posts),
+            total_posts=len(relevant_posts),
             avg_sentiment=avg_sentiment,
         )
 
@@ -119,10 +125,14 @@ def get_posts(symbol: str, limit: int = 50):
     
     with get_session() as session:
         posts = session.exec(
-            select(Post).where(
-                Post.symbols.contains(symbol),
-            ).order_by(Post.created_at.desc()).limit(limit)
+            select(Post).order_by(Post.created_at.desc())
         ).all()
+
+        # Filter for posts mentioning this symbol and limit
+        relevant_posts = [
+            p for p in posts 
+            if symbol in [s.strip() for s in (p.symbols or "").split(",")]
+        ][:limit]
 
         return [
             PostDetail(
@@ -134,5 +144,5 @@ def get_posts(symbol: str, limit: int = 50):
                 sentiment=p.sentiment or 0.0,
                 url=p.url,
             )
-            for p in posts
+            for p in relevant_posts
         ]
