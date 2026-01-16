@@ -34,12 +34,14 @@ def run_ingest_once():
     with get_session() as session:
         for ad in adapters:
             adapter_name = ad.__class__.__name__
+            adapter_posts = 0
             try:
                 for item in ad.fetch():
                     total_posts += 1
+                    adapter_posts += 1
                     if process_item(session, item):
                         inserted += 1
-                logger.info(f"[{adapter_name}] Processed {total_posts} posts, {inserted} new")
+                logger.info(f"[{adapter_name}] Processed {adapter_posts} posts, {inserted} new total")
             except Exception as e:
                 logger.error(f"[{adapter_name}] Error: {e}")
 
