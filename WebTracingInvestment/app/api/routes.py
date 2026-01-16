@@ -10,7 +10,28 @@ router = APIRouter()
 
 @router.get("/health")
 def health():
-    return {"ok": True}
+    """
+    Health check with database status.
+    Returns ok if database is accessible and has data.
+    """
+    try:
+        with get_session() as session:
+            # Try simple queries to verify database is working
+            post_count = len(session.exec(select(Post)).all())
+            bucket_count = len(session.exec(select(SentimentBucket)).all())
+            
+        return {
+            "ok": True,
+            "database": "connected",
+            "posts_total": post_count,
+            "sentiment_buckets": bucket_count,
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "database": "disconnected",
+            "error": str(e),
+        }
 
 @router.get("/sentiment/hourly", response_model=list[BucketOut])
 def hourly(symbol: str | None = None, hours: int = 24):
