@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter
-from sqlmodel import select
+from sqlmodel import select, func
 
 from app.db.session import get_session
-from app.db.models import SentimentBucket
-from app.api.schemas import BucketOut
+from app.db.models import SentimentBucket, Post
+from app.api.schemas import BucketOut, SentimentDistribution, StockSentimentSummary, PostDetail
 
 router = APIRouter()
 
@@ -31,3 +31,108 @@ def hourly(symbol: str | None = None, hours: int = 24):
 
         rows = session.exec(q).all()
         return [BucketOut(**r.model_dump()) for r in rows]
+
+@router.get("/sentiment/distribution/{symbol}", response_model=SentimentDistribution)
+def sentiment_distribution(symbol: str, hours: int = 24):
+    """
+    Returns sentiment distribution breakdown for a symbol (very negative, negative, neutral, positive, very positive).
+    """
+    now = datetime.now(tz=timezone.utc)
+    start = now - timedelta(hours=hours)
+    symbol = symbol.upper()
+
+    with get_session() as session:
+        posts = session.exec(
+            select(Post).where(
+                Post.created_at >= start,
+                Post.symbols.contains(symbol),
+                Post.sentiment.isnot(None),
+            )
+        ).all()
+
+        very_negative = sum(1 for p in posts if p.sentiment <= -0.6)
+        negative = sum(1 for p in posts if -0.6 < p.sentiment <= -0.2)
+        neutral = sum(1 for p in posts if -0.2 < p.sentiment < 0.2)
+        positive = sum(1 for p in posts if 0.2 <= p.sentiment < 0.6)
+        very_positive = sum(1 for p in posts if p.sentiment >= 0.6)
+        
+        avg_sentiment = sum(p.sentiment for p in posts) / len(posts) if posts else 0.0
+
+        return SentimentDistribution(
+            symbol=symbol,
+            very_negative=very_negative,
+            negative=negative,
+            neutral=neutral,
+            positive=positive,
+            very_positive=very_positive,
+            total_posts=len(posts),
+            avg_sentiment=avg_sentiment,
+        )
+
+@router.get("/sentiment/stocks", response_model=list[StockSentimentSummary])
+def all_stocks(hours: int = 24):
+    """
+    Returns sentiment summary for all tracked stocks in the last N hours.
+    Sorted by post count (most discussed first).
+    """
+    now = datetime.now(tz=timezone.utc)
+    start = now - timedelta(hours=hours)
+
+    with get_session() as session:
+        posts = session.exec(
+            select(Post).where(
+                Post.created_at >= start,
+                Post.sentiment.isnot(None),
+            )
+        ).all()
+
+        # Group by symbol
+        symbol_stats = {}
+        for post in posts:
+            symbols = [s.strip() for s in (post.symbols or "").split(",") if s.strip()]
+            for sym in symbols:
+                if sym not in symbol_stats:
+                    symbol_stats[sym] = {"posts": [], "recent": post.created_at}
+                symbol_stats[sym]["posts"].append(post.sentiment)
+                symbol_stats[sym]["recent"] = max(symbol_stats[sym]["recent"], post.created_at)
+
+        # Build response, sorted by post count
+        results = []
+        for sym, stats in sorted(symbol_stats.items(), key=lambda x: len(x[1]["posts"]), reverse=True):
+            avg = sum(stats["posts"]) / len(stats["posts"])
+            results.append(
+                StockSentimentSummary(
+                    symbol=sym,
+                    total_posts=len(stats["posts"]),
+                    avg_sentiment=avg,
+                    most_recent_post=stats["recent"],
+                )
+            )
+        return results
+
+@router.get("/posts/{symbol}", response_model=list[PostDetail])
+def get_posts(symbol: str, limit: int = 50):
+    """
+    Returns recent posts mentioning a symbol.
+    """
+    symbol = symbol.upper()
+    
+    with get_session() as session:
+        posts = session.exec(
+            select(Post).where(
+                Post.symbols.contains(symbol),
+            ).order_by(Post.created_at.desc()).limit(limit)
+        ).all()
+
+        return [
+            PostDetail(
+                source=p.source,
+                author=p.author,
+                created_at=p.created_at,
+                text=p.text,
+                symbols=p.symbols,
+                sentiment=p.sentiment or 0.0,
+                url=p.url,
+            )
+            for p in posts
+        ]
