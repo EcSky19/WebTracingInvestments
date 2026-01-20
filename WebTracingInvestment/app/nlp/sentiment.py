@@ -2,7 +2,7 @@
 
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-_analyzer = SentimentIntensityAnalyzer()
+__all__ = ["score_sentiment"]
 
 def score_sentiment(text: str) -> float:
     """

@@ -1,11 +1,11 @@
-\"\"\"Central configuration for tracked symbols and aliases.
+"""Central configuration for tracked symbols and aliases.
 
 This module defines which companies/stocks are tracked and their various
 aliases (ticker symbols, company names, product names, CEO names, etc.)
 
 Update TRACKED dict to add more symbols or refine existing aliases based on
 what you observe in real social media posts.
-\"\"\"
+"""
 
 # Central truth for what you track.
 # You will expand aliases over time based on what you see in real posts.
