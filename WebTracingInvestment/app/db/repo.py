@@ -1,3 +1,5 @@
+"""Database repository functions for data access."""
+
 from sqlmodel import Session, select
 from app.db.models import Post
 

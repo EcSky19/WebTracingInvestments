@@ -1,3 +1,5 @@
+"""Sentiment aggregation service for hourly bucketing."""
+
 import logging
 from datetime import datetime, timezone
 from sqlmodel import Session, select

@@ -1,7 +1,20 @@
 [project]
 name = "social-sentiment-mvp"
 version = "0.1.0"
+description = "Social sentiment analysis for stock market research"
+authors = [{name = "Your Name", email = "your.email@example.com"}]
+readme = "README.md"
+license = {text = "MIT"}
 requires-python = ">=3.10"
+keywords = ["sentiment-analysis", "stocks", "reddit", "social-media"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Financial and Insurance Industry",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
 dependencies = [
   "fastapi>=0.110",
   "uvicorn>=0.27",
@@ -16,6 +29,38 @@ dependencies = [
   "praw>=7.7",
   "vaderSentiment>=3.3.2",
 ]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4",
+  "pytest-asyncio>=0.21",
+  "black>=23.0",
+  "ruff>=0.1",
+  "mypy>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/WebTracingInvestment"
+Repository = "https://github.com/yourusername/WebTracingInvestment"
+
+[build-system]
+requires = ["setuptools>=65"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "W", "I"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
 
 [tool.uvicorn]
 factory = false

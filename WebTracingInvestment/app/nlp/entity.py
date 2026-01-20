@@ -1,3 +1,4 @@
+"""Entity extraction and symbol detection from text."""
 import re
 from app.core.symbols import all_aliases_upper
 

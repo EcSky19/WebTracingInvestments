@@ -1,3 +1,5 @@
+"""Sentiment analysis module using VADER sentiment analyzer."""
+
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 _analyzer = SentimentIntensityAnalyzer()

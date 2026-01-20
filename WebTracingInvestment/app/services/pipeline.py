@@ -1,3 +1,5 @@
+"""Data processing pipeline: ingestion → NLP → storage."""
+
 import logging
 from app.ingest.base import RawItem
 from app.db.models import Post
