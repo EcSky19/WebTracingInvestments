@@ -1,15 +1,15 @@
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from sqlmodel import select
 
 from app.db.session import get_session
 from app.db.models import SentimentBucket, Post
-from app.api.schemas import BucketOut, SentimentDistribution, StockSentimentSummary, PostDetail
+from app.api.schemas import BucketOut, SentimentDistribution, StockSentimentSummary, PostDetail, HealthResponse
 
 router = APIRouter()
 
-@router.get("/health")
-def health():
+@router.get("/health", response_model=HealthResponse)
+def health() -> HealthResponse:
     """
     Health check with database status.
     Returns ok if database is accessible and has data.

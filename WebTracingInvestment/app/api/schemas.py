@@ -1,6 +1,14 @@
 from datetime import datetime
 from pydantic import BaseModel
 
+class HealthResponse(BaseModel):
+    """Health check response"""
+    ok: bool
+    database: str
+    posts_total: int | None = None
+    sentiment_buckets: int | None = None
+    error: str | None = None
+
 class BucketOut(BaseModel):
     symbol: str
     bucket_start: datetime

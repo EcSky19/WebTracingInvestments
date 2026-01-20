@@ -16,7 +16,7 @@ Social sentiment analysis for stock market research. Tracks keywords and sentime
 ### 1. Install Dependencies
 
 ```bash
-pip install -r pyproject.toml
+pip install -r requirements.txt
 ```
 
 ### 2. Configure Environment
