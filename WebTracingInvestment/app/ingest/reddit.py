@@ -1,9 +1,9 @@
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Iterable, List
+from typing import Iterable
 import praw
-from praw.exceptions import PrawException
+from praw.exceptions import PRAWException
 
 from app.config import settings
 from app.ingest.base import RawItem, Adapter
@@ -17,7 +17,7 @@ class RedditAdapter(Adapter):
     - Gracefully handles rate limits with backoff
     - Logs errors without breaking the pipeline
     """
-    def __init__(self, subreddits: List[str] | None = None, limit: int = 50):
+    def __init__(self, subreddits: list[str] | None = None, limit: int = 50):
         self.subreddits = subreddits or ["stocks", "wallstreetbets", "investing", "technology", "CryptoCurrency"]
         self.limit = limit
 
@@ -65,7 +65,7 @@ class RedditAdapter(Adapter):
                         logger.info(f"Reddit r/{sr}: Fetched {post_count} posts")
                         break  # Success, exit retry loop
                         
-                    except PrawException as e:
+                    except PRAWException as e:
                         retry_count += 1
                         if "429" in str(e) or "rate limit" in str(e).lower():
                             wait_time = 2 ** retry_count  # Exponential backoff
