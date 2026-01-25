@@ -3,7 +3,7 @@
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 __all__ = ["score_sentiment"]
-
+_analyzer = SentimentIntensityAnalyzer()
 def score_sentiment(text: str) -> float:
     """
     Returns compound sentiment in [-1, 1].

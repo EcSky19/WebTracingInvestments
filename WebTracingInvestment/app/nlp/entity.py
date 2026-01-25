@@ -1,6 +1,9 @@
 """Entity extraction and symbol detection from text."""
+
 import re
 from app.core.symbols import all_aliases_upper
+
+__all__ = ["detect_symbols", "clean_text"]
 
 ALIAS_MAP = all_aliases_upper()
 
