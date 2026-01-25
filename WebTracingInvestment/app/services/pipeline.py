@@ -8,6 +8,8 @@ from app.nlp.entity import clean_text, detect_symbols
 from app.nlp.sentiment import score_sentiment
 from sqlmodel import Session
 
+__all__ = ["process_item"]
+
 logger = logging.getLogger(__name__)
 
 def process_item(session: Session, item: RawItem) -> bool:
