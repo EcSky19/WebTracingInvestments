@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from sqlmodel import Session, select
 from app.db.models import Post, SentimentBucket
 
+__all__ = ["floor_to_hour", "aggregate_hour"]
+
 logger = logging.getLogger(__name__)
 
 def floor_to_hour(dt: datetime) -> datetime:
