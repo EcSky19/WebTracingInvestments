@@ -3,6 +3,8 @@
 from sqlmodel import Session, select
 from app.db.models import Post
 
+__all__ = ["upsert_post", "list_recent_posts"]
+
 def upsert_post(session: Session, post: Post) -> bool:
     """
     Insert if not exists (by unique index).
