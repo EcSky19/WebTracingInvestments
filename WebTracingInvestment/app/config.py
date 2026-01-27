@@ -2,6 +2,8 @@
 
 from pydantic_settings import BaseSettings
 
+__all__ = ["Settings", "settings"]
+
 class Settings(BaseSettings):
     """Application settings from environment variables."""
     

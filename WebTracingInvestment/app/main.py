@@ -1,8 +1,12 @@
+"""Main application factory and entry point."""
+
 from fastapi import FastAPI
 from app.core.logging import setup_logging
 from app.db.session import init_db
 from app.api.routes import router
 from app.jobs.scheduler import start_scheduler
+
+__all__ = ["app", "create_app"]
 
 def create_app() -> FastAPI:
     setup_logging()
