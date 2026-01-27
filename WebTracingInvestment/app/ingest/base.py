@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Iterable, Protocol, Optional
+from typing import Iterable, Protocol
 
 __all__ = ["RawItem", "Adapter"]
 
@@ -24,9 +24,9 @@ class RawItem:
     source: str
     source_id: str
     created_at: datetime
-    author: Optional[str]
-    url: Optional[str]
-    title: Optional[str]
+    author: str | None
+    url: str | None
+    title: str | None
     text: str
 
 class Adapter(Protocol):
