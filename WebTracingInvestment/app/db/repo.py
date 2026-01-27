@@ -19,5 +19,5 @@ def upsert_post(session: Session, post: Post) -> bool:
     session.commit()
     return True
 
-def list_recent_posts(session: Session, limit: int = 100):
+def list_recent_posts(session: Session, limit: int = 100) -> list[Post]:
     return session.exec(select(Post).order_by(Post.created_at.desc()).limit(limit)).all()
