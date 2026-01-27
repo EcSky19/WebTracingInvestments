@@ -7,6 +7,8 @@ Update TRACKED dict to add more symbols or refine existing aliases based on
 what you observe in real social media posts.
 """
 
+__all__ = ["TRACKED", "all_aliases_upper"]
+
 # Central truth for what you track.
 # You will expand aliases over time based on what you see in real posts.
 # Tip: keep aliases mostly uppercase terms and common company/product names.

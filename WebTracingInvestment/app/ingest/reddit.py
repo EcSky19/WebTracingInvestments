@@ -1,3 +1,5 @@
+"""Reddit data ingestion adapter with rate limit handling."""
+
 import logging
 import time
 from datetime import datetime, timezone
@@ -7,6 +9,8 @@ from praw.exceptions import PRAWException
 
 from app.config import settings
 from app.ingest.base import RawItem, Adapter
+
+__all__ = ["RedditAdapter"]
 
 logger = logging.getLogger(__name__)
 

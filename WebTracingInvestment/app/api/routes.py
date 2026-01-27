@@ -1,3 +1,5 @@
+"""API routes for sentiment analysis endpoints."""
+
 from datetime import datetime, timedelta, timezone
 import logging
 from fastapi import APIRouter, Query
@@ -6,6 +8,8 @@ from sqlmodel import select
 from app.db.session import get_session
 from app.db.models import SentimentBucket, Post
 from app.api.schemas import BucketOut, SentimentDistribution, StockSentimentSummary, PostDetail, HealthResponse
+
+__all__ = ["router"]
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

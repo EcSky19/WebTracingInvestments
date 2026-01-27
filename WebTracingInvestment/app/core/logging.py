@@ -1,6 +1,10 @@
+"""Logging configuration module."""
+
 import logging
 from pathlib import Path
 from app.config import settings
+
+__all__ = ["setup_logging"]
 
 def setup_logging():
     """Configure application logging with both console and file handlers."""

@@ -1,3 +1,5 @@
+"""Background job scheduler for periodic ingestion tasks."""
+
 import logging
 from datetime import datetime, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -7,6 +9,8 @@ from app.ingest.reddit import RedditAdapter
 from app.ingest.threads import ThreadsAdapter
 from app.services.pipeline import process_item
 from app.services.aggregation import aggregate_hour, floor_to_hour
+
+__all__ = ["run_ingest_once", "start_scheduler"]
 
 logger = logging.getLogger(__name__)
 

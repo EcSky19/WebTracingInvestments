@@ -1,3 +1,5 @@
+"""Threads (Meta) data ingestion adapter using Graph API."""
+
 import logging
 from typing import Iterable
 from datetime import datetime, timezone
@@ -5,6 +7,8 @@ import httpx
 
 from app.config import settings
 from app.ingest.base import RawItem, Adapter
+
+__all__ = ["ThreadsAdapter"]
 
 logger = logging.getLogger(__name__)
 
