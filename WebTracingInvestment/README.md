@@ -139,6 +139,35 @@ Currently tracking ~15 major stocks (TSLA, AAPL, NVDA, MSFT, etc.). Add more in 
 
 Uses VADER sentiment analyzer (upgradeable to FinBERT for finance-specific scoring).
 
+## Development
+
+### Project Structure
+
+- `app/core/` - Core utilities (logging, symbol tracking)
+- `app/ingest/` - Data source adapters (Reddit, Threads)
+- `app/nlp/` - NLP processing (sentiment, entity extraction)
+- `app/db/` - Database models and session management
+- `app/services/` - Business logic (pipeline, aggregation)
+- `app/jobs/` - Background task scheduler
+- `app/api/` - REST API routes and schemas
+
+### Code Quality
+
+All modules have:
+- Type hints for better IDE support
+- Module docstrings explaining purpose
+- `__all__` exports for explicit APIs
+- Comprehensive error handling and logging
+
+### Type Checking
+
+The project uses Python 3.10+ type annotations. To check types:
+
+```bash
+pip install mypy
+mypy app
+```
+
 ## Next Steps
 
 - [ ] Add stock price ingestion (yfinance)

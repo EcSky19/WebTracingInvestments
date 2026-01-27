@@ -1,7 +1,6 @@
 """Database models for ORM."""
 
 from datetime import datetime
-from typing import Optional
 from sqlmodel import SQLModel, Field, Index
 
 __all__ = ["Post", "SentimentBucket"]
@@ -11,23 +10,23 @@ class Post(SQLModel, table=True):
     Raw social post/comment (normalized across sources).
     Store minimal raw fields + clean text for NLP.
     """
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
 
     source: str = Field(index=True)           # "reddit" | "threads" | ...
     source_id: str = Field(index=True)        # unique id per source
-    url: Optional[str] = None
+    url: str | None = None
 
-    author: Optional[str] = None
+    author: str | None = None
     created_at: datetime = Field(index=True)
 
     # Raw and cleaned text
-    title: Optional[str] = None
+    title: str | None = None
     text: str
     text_clean: str = ""
 
     # NLP outputs
     symbols: str = ""                         # comma-separated symbols for MVP
-    sentiment: Optional[float] = Field(default=None, index=True)  # -1..1
+    sentiment: float | None = Field(default=None, index=True)  # -1..1
 
     # Lightweight dedupe: source + source_id should be unique
     __table_args__ = (
@@ -39,7 +38,7 @@ class SentimentBucket(SQLModel, table=True):
     Aggregated sentiment per symbol per time bucket (e.g., hourly).
     This is what your UI / trading signals read from.
     """
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
 
     symbol: str = Field(index=True)
     bucket_start: datetime = Field(index=True)   # start of hour/day bucket
