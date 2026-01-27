@@ -1,7 +1,10 @@
 #!/usr/bin/env python
-"""
-Setup verification script to test all components are working.
+"""Setup verification script to test all components are working.
+
 Run this after configuring .env to verify the system.
+
+Usage:
+    python setup_test.py
 """
 
 import sys
