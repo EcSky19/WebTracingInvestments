@@ -14,8 +14,29 @@ logger = logging.getLogger(__name__)
 
 def process_item(session: Session, item: RawItem) -> bool:
     """
-    One item through the whole pipeline.
-    Returns True if inserted (new), False if duplicate.
+    Process a single item through the entire pipeline.
+    
+    Performs the following steps:
+    1. Clean text (remove URLs, normalize whitespace)
+    2. Detect tracked symbols (company mentions)
+    3. Score sentiment using VADER
+    4. Store post and metadata in database
+    
+    Early filtering: Posts mentioning no tracked symbols are discarded
+    before sentiment analysis to avoid processing irrelevant content.
+    
+    Args:
+        session: Database session
+        item: Raw item from an ingestion adapter
+        
+    Returns:
+        True if post was inserted (new post)
+        False if post already existed (duplicate) or no tracked symbols found
+        
+    Example:
+        >>> item = RawItem(source="reddit", source_id="abc123", ...)
+        >>> process_item(session, item)
+        True  # Post was inserted
     """
     text_clean = clean_text(item.text)
     symbols = detect_symbols(text_clean)
