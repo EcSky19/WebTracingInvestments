@@ -10,17 +10,46 @@ __all__ = ["floor_to_hour", "aggregate_hour"]
 logger = logging.getLogger(__name__)
 
 def floor_to_hour(dt: datetime) -> datetime:
+    """
+    Round a datetime down to the nearest hour boundary.
+    
+    Useful for bucketing posts into hourly sentiment aggregations.
+    
+    Args:
+        dt: Datetime to round (any timezone)
+        
+    Returns:
+        Datetime rounded down to hour start (MM:00:00.000000 UTC)
+        
+    Examples:
+        >>> dt = datetime(2026, 1, 19, 14, 45, 30)
+        >>> floor_to_hour(dt)
+        datetime(2026, 1, 19, 14, 0, 0, tzinfo=UTC)
+    """
     dt = dt.astimezone(timezone.utc)
     return dt.replace(minute=0, second=0, microsecond=0)
 
-def aggregate_hour(session: Session, hour_start: datetime):
+
+def aggregate_hour(session: Session, hour_start: datetime) -> None:
     """
-    Recompute aggregates for a given hour.
-    MVP: simple mean sentiment per symbol.
-    Later:
-    - weighted by upvotes/engagement
-    - separate reddit vs threads weights
-    - robust stats (median, trimmed mean)
+    Recompute sentiment aggregates for a given hour.
+    
+    Computes the average sentiment for each tracked symbol within a one-hour
+    window and creates or updates SentimentBucket records.
+    
+    This is called after each ingest cycle to keep aggregations up-to-date.
+    
+    Args:
+        session: Database session
+        hour_start: Start of the hour to aggregate (will be rounded)
+        
+    Note:
+        MVP implementation: uses simple mean sentiment per symbol.
+        
+        Future enhancements could include:
+        - Weighted sentiment by post engagement (upvotes, replies)
+        - Separate weighting for reddit vs threads posts
+        - Robust statistics (median, trimmed mean) instead of mean
     """
     hour_start = floor_to_hour(hour_start)
     hour_end = hour_start.replace(minute=59, second=59, microsecond=999999)
