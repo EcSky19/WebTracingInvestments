@@ -30,8 +30,43 @@ class RawItem:
     text: str
 
 class Adapter(Protocol):
-    """Protocol for data source adapters."""
+    """
+    Protocol for data source adapters.
+    
+    Defines the interface that all data ingestion adapters must implement.
+    Each adapter is responsible for fetching items from a specific source
+    (e.g., Reddit, Threads) and transforming them into RawItem objects.
+    
+    The pipeline calls fetch() on each adapter and processes the returned
+    items through NLP analysis and database storage.
+    
+    Implementations:
+        - RedditAdapter: Fetches posts from Reddit via PRAW
+        - ThreadsAdapter: Fetches posts from Threads via Meta Graph API
+    
+    Methods:
+        fetch(): Generator that yields RawItem objects from the source.
+                Each implementation decides its own pagination strategy.
+                
+    Example:
+        >>> adapter = RedditAdapter(limit=50)
+        >>> for item in adapter.fetch():
+        ...     print(f"Fetched: {item.source_id}")
+    """
     
     def fetch(self) -> Iterable[RawItem]:
-        """Pull newest items. Each adapter decides its own pagination strategy."""
+        """
+        Fetch items from data source.
+        
+        Each adapter decides its own pagination and rate-limiting strategy.
+        This is a generator that yields RawItem objects one at a time
+        as they are fetched from the source API.
+        
+        Returns:
+            Iterable of RawItem objects from the source
+            
+        Raises:
+            Exception: Implementation-specific errors (API errors, network issues, etc.)
+                       Should be caught and logged by the caller (pipeline).
+        """
         ...
