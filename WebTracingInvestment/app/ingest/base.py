@@ -10,16 +10,41 @@ __all__ = ["RawItem", "Adapter"]
 class RawItem:
     """
     Canonical item produced by any adapter.
-    Everything else in the pipeline expects THIS shape.
+    
+    Standard data structure used by all ingestion adapters. The entire
+    pipeline (NLP analysis, database storage, API responses) expects items
+    in this format. Adapters are responsible for transforming source-specific
+    formats into this uniform RawItem representation.
+    
+    This is the contract between adapters and the rest of the system.
+    Everything downstream assumes this shape.
     
     Attributes:
         source: Data source identifier (e.g., 'reddit', 'threads')
-        source_id: Unique ID from the source
-        created_at: When the item was created
-        author: Author/username (optional)
-        url: Direct link to the item (optional)
-        title: Item title (optional)
-        text: Main text content
+                Used to distinguish post origins in database/reports
+        source_id: Unique ID from the source (post ID, comment ID, etc.)
+                   Combined with source for deduplication
+        created_at: When the item was created (timezone-aware datetime)
+                    ISO 8601 format preferred
+        author: Author/username (optional, may be None for anonymous sources)
+                Used for attribution and user-based filtering
+        url: Direct link to the item (optional, for deep-linking)
+             Used in API responses for user drill-down
+        title: Item title (optional, may be None for some sources)
+               For display in listings/headlines
+        text: Main text content (required)
+              Used for NLP analysis (symbol detection, sentiment)
+              
+    Example:
+        >>> item = RawItem(
+        ...     source="reddit",
+        ...     source_id="t3_abc123",
+        ...     created_at=datetime(2026, 2, 2, 20, 30, tzinfo=timezone.utc),
+        ...     author="InvestmentGuy",
+        ...     url="https://reddit.com/r/stocks/comments/abc123",
+        ...     title="Bullish on AAPL",
+        ...     text="Strong earnings report signals growth ahead"
+        ... )
     """
     source: str
     source_id: str
