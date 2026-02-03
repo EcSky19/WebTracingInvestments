@@ -16,12 +16,41 @@ logger = logging.getLogger(__name__)
 
 class RedditAdapter(Adapter):
     """
-    Reddit adapter with rate limit handling.
-    - Pulls new posts from tracked subreddits
-    - Gracefully handles rate limits with backoff
-    - Logs errors without breaking the pipeline
+    Reddit data ingestion adapter with exponential backoff retry logic.
+    
+    Fetches new posts from specified subreddits, normalizes them to RawItem format,
+    and handles rate limiting gracefully with exponential backoff.
+    
+    Requires Reddit API credentials in .env:
+    - REDDIT_CLIENT_ID
+    - REDDIT_CLIENT_SECRET
+    - REDDIT_USER_AGENT
+    
+    Attributes:
+        subreddits: List of subreddit names to fetch from
+        limit: Number of posts per subreddit per fetch (default 50)
+        client: Authenticated PRAW Reddit client
+        
+    Example:
+        >>> adapter = RedditAdapter(
+        ...     subreddits=["stocks", "technology"],
+        ...     limit=30
+        ... )
+        >>> for item in adapter.fetch():
+        ...     print(item.source_id, item.text[:50])
     """
     def __init__(self, subreddits: list[str] | None = None, limit: int = 50):
+        """
+        Initialize Reddit adapter with optional subreddits list.
+        
+        Args:
+            subreddits: List of subreddit names. If None, uses defaults
+                       (stocks, wallstreetbets, investing, technology, CryptoCurrency)
+            limit: Max posts per subreddit per fetch (default 50)
+            
+        Raises:
+            RuntimeError: If Reddit credentials are missing from .env
+        """
         self.subreddits = subreddits or ["stocks", "wallstreetbets", "investing", "technology", "CryptoCurrency"]
         self.limit = limit
 
@@ -37,6 +66,7 @@ class RedditAdapter(Adapter):
         logger.debug("Reddit client initialized")
 
     def fetch(self) -> Iterable[RawItem]:
+        """Fetch new posts from Reddit subreddits with rate limit handling."""
         for sr in self.subreddits:
             try:
                 subreddit = self.client.subreddit(sr)
