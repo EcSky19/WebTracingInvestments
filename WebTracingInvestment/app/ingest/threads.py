@@ -14,13 +14,35 @@ logger = logging.getLogger(__name__)
 
 class ThreadsAdapter(Adapter):
     """
-    Threads adapter using Meta Graph API.
-    Requires: THREADS_ACCESS_TOKEN and THREADS_USER_ID in .env
+    Threads (Meta) data ingestion adapter using Graph API.
+    
+    Fetches posts from Meta's Threads social media platform using the Graph API.
+    This adapter is optional and gracefully degrades if credentials are missing.
+    
+    Requires Threads API credentials in .env (optional):
+    - THREADS_ACCESS_TOKEN: Meta Graph API access token
+    - THREADS_USER_ID: Your Threads user ID
     
     API Endpoint: GET /{user_id}/threads
+    
     Fields: id, text, timestamp, permalink_url, username
+    
+    Attributes:
+        limit: Number of posts to fetch per request (default 50)
+        token: Graph API access token (optional)
+        user_id: Threads user ID (optional)
+        
+    Note:
+        If credentials are missing, this adapter returns no items (no-op).
+        It will not raise an error, allowing the pipeline to continue.
     """
     def __init__(self, limit: int = 50):
+        """
+        Initialize Threads adapter (optional credentials).
+        
+        Args:
+            limit: Max posts per fetch (default 50)
+        """
         self.limit = limit
         self.token = settings.THREADS_ACCESS_TOKEN
         self.user_id = settings.THREADS_USER_ID
@@ -31,6 +53,21 @@ class ThreadsAdapter(Adapter):
             logger.warning("✗ Threads adapter: Missing credentials (THREADS_ACCESS_TOKEN or THREADS_USER_ID)")
 
     def fetch(self) -> Iterable[RawItem]:
+        """
+        Fetch new posts from Threads API (no-op if credentials missing).
+        
+        Uses the Meta Graph API to retrieve user's recent posts.
+        Rate limit: 200 requests/hour per user.
+        
+        Returns:
+            Iterable of RawItem dictionaries with posts fetched from Threads.
+            Returns empty iterator if credentials are missing.
+            
+        Raises:
+            httpx.RequestError: If API request fails (connection, timeout, etc.)
+            httpx.HTTPStatusError: If API returns error status (401, 404, 429, etc.)
+            json.JSONDecodeError: If response is not valid JSON.
+        """
         if not (self.token and self.user_id):
             return  # no-op if credentials missing
 
