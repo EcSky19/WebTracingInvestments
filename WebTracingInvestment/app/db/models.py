@@ -8,7 +8,9 @@ __all__ = ["Post", "SentimentBucket"]
 class Post(SQLModel, table=True):
     """
     Raw social post/comment (normalized across sources).
-    Store minimal raw fields + clean text for NLP.
+    
+    Stores minimal raw fields + clean text for NLP processing.
+    Each post is uniquely identified by (source, source_id) pair.
     """
     id: int | None = Field(default=None, primary_key=True)
 
