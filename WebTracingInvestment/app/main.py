@@ -1,23 +1,46 @@
 """Main application factory and entry point."""
 
+import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.core.logging import setup_logging
 from app.db.session import init_db
 from app.api.routes import router
-from app.jobs.scheduler import start_scheduler
+from app.jobs.scheduler import start_scheduler, scheduler
 
 __all__ = ["app", "create_app"]
 
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle startup and shutdown events for the application."""
+    # Startup
+    logger.info("Application starting up...")
+    yield
+    # Shutdown
+    logger.info("Application shutting down...")
+    if scheduler and scheduler.running:
+        scheduler.shutdown()
+        logger.info("Scheduler shutdown complete")
+
 def create_app() -> FastAPI:
+    """Create and configure the FastAPI application."""
     setup_logging()
     init_db()
 
-    app = FastAPI(title="Social Sentiment MVP")
+    app = FastAPI(
+        title="Social Sentiment MVP",
+        description="Real-time sentiment analysis for stock market research",
+        version="0.1.0",
+        lifespan=lifespan,
+    )
     app.include_router(router)
 
     # Start scheduler in-process.
     # Later: move this to a separate worker container (cleaner + scalable).
     start_scheduler()
+    logger.info("Background scheduler started")
 
     return app
 

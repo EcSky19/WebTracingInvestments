@@ -10,9 +10,10 @@ from app.ingest.threads import ThreadsAdapter
 from app.services.pipeline import process_item
 from app.services.aggregation import aggregate_hour, floor_to_hour
 
-__all__ = ["run_ingest_once", "start_scheduler"]
+__all__ = ["run_ingest_once", "start_scheduler", "scheduler"]
 
 logger = logging.getLogger(__name__)
+scheduler: BackgroundScheduler | None = None
 
 def run_ingest_once():
     """
@@ -59,10 +60,15 @@ def run_ingest_once():
     return inserted
 
 def start_scheduler() -> BackgroundScheduler:
-    sched = BackgroundScheduler(timezone="UTC")
-
-    # MVP cadence: every 5 minutes
-    sched.add_job(run_ingest_once, "interval", minutes=5, id="ingest")
-
-    sched.start()
-    return sched
+    """Initialize and start the background scheduler."""
+    global scheduler
+    try:
+        scheduler = BackgroundScheduler(timezone="UTC")
+        # MVP cadence: every 5 minutes
+        scheduler.add_job(run_ingest_once, "interval", minutes=5, id="ingest")
+        scheduler.start()
+        logger.info("Background scheduler started successfully")
+        return scheduler
+    except Exception as e:
+        logger.error(f"Failed to start scheduler: {e}")
+        raise

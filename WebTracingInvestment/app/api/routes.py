@@ -56,6 +56,7 @@ def hourly(symbol: str | None = None, hours: int = Query(24, gt=0, le=720)) -> l
     try:
         now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
         start = now - timedelta(hours=hours)
+        symbol_upper = symbol.upper() if symbol else None
 
         with get_session() as session:
             q = select(SentimentBucket).where(
@@ -63,14 +64,14 @@ def hourly(symbol: str | None = None, hours: int = Query(24, gt=0, le=720)) -> l
                 SentimentBucket.bucket_start >= start,
             ).order_by(SentimentBucket.bucket_start.asc())
 
-            if symbol:
-                q = q.where(SentimentBucket.symbol == symbol.upper())
+            if symbol_upper:
+                q = q.where(SentimentBucket.symbol == symbol_upper)
 
             rows = session.exec(q).all()
-            logger.debug(f"Retrieved {len(rows)} hourly buckets for {symbol or 'all symbols'}")
+            logger.debug(f"Retrieved {len(rows)} hourly buckets for {symbol_upper or 'all symbols'}")
             return [BucketOut(**r.model_dump()) for r in rows]
     except Exception as e:
-        logger.error(f"Error fetching hourly sentiment: {e}")
+        logger.error(f"Error fetching hourly sentiment: {e}", exc_info=True)
         raise
 
 @router.get("/sentiment/distribution/{symbol}", response_model=SentimentDistribution)

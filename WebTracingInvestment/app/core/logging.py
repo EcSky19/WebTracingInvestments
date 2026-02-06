@@ -6,7 +6,7 @@ from app.config import settings
 
 __all__ = ["setup_logging"]
 
-def setup_logging():
+def setup_logging() -> None:
     """Configure application logging with both console and file handlers."""
     
     # Create logs directory if needed
