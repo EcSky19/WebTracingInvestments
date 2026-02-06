@@ -18,7 +18,9 @@ router = APIRouter()
 def health() -> HealthResponse:
     """
     Health check with database status.
+    
     Returns ok if database is accessible and has data.
+    Useful for monitoring and load balancer health checks.
     """
     try:
         with get_session() as session:
