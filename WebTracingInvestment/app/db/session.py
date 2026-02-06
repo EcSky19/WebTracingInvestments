@@ -23,9 +23,11 @@ def init_db() -> None:
 def get_session():
     """Get a database session with proper context manager support.
     
+    Ensures sessions are properly closed after use, preventing connection leaks.
+    
     Usage:
         with get_session() as session:
-            # Use session
+            # Use session for queries
     """
     session = Session(engine)
     try:

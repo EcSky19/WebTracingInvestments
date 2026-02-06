@@ -7,7 +7,13 @@ from app.config import settings
 __all__ = ["setup_logging"]
 
 def setup_logging() -> None:
-    """Configure application logging with both console and file handlers."""
+    """Configure application logging with both console and file handlers.
+    
+    Sets up:
+    - Console output at INFO level
+    - File logging in logs/app.log at INFO level
+    - Error logging in logs/errors.log at ERROR level
+    """
     
     # Create logs directory if needed
     log_dir = Path("logs")
