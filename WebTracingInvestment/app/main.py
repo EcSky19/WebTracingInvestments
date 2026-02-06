@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
+    # Initialize logging and database
     setup_logging()
     init_db()
 
