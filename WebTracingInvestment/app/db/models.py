@@ -14,25 +14,26 @@ class Post(SQLModel, table=True):
     """
     id: int | None = Field(default=None, primary_key=True)
 
-    source: str = Field(index=True)           # "reddit" | "threads" | ...
-    source_id: str = Field(index=True)        # unique id per source
-    url: str | None = None
+    source: str = Field(index=True, min_length=1, max_length=50)           # "reddit" | "threads" | ...
+    source_id: str = Field(index=True, min_length=1, max_length=255)       # unique id per source
+    url: str | None = Field(default=None, max_length=1024)
 
-    author: str | None = None
+    author: str | None = Field(default=None, max_length=255)
     created_at: datetime = Field(index=True)
 
     # Raw and cleaned text
-    title: str | None = None
-    text: str
-    text_clean: str = ""
+    title: str | None = Field(default=None, max_length=512)
+    text: str = Field(max_length=8192)
+    text_clean: str = Field(default="", max_length=8192)
 
-    # NLP outputs
-    symbols: str = ""                         # comma-separated symbols for MVP
-    sentiment: float | None = Field(default=None, index=True)  # -1..1
+    # NLP outputs - sentiment is -1..1 normalized
+    symbols: str = Field(default="", max_length=1024)                     # comma-separated symbols for MVP
+    sentiment: float | None = Field(default=None, index=True, ge=-1.0, le=1.0)  # -1..1 range
 
     # Lightweight dedupe: source + source_id should be unique
     __table_args__ = (
         Index("ix_post_source_source_id_unique", "source", "source_id", unique=True),
+        Index("ix_post_symbols_sentiment", "symbols", "sentiment"),  # For symbol-sentiment queries
     )
 
 class SentimentBucket(SQLModel, table=True):
@@ -42,12 +43,12 @@ class SentimentBucket(SQLModel, table=True):
     """
     id: int | None = Field(default=None, primary_key=True)
 
-    symbol: str = Field(index=True)
+    symbol: str = Field(index=True, min_length=1, max_length=10)
     bucket_start: datetime = Field(index=True)   # start of hour/day bucket
-    bucket: str = Field(index=True)              # "hour" | "day"
+    bucket: str = Field(index=True, min_length=3, max_length=10)          # "hour" | "day"
 
-    post_count: int = 0
-    avg_sentiment: float = 0.0
+    post_count: int = Field(default=0, ge=0)
+    avg_sentiment: float = Field(default=0.0, ge=-1.0, le=1.0)
     
     # Composite index for common query pattern
     __table_args__ = (

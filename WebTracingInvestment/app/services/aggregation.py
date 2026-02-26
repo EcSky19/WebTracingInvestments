@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime, timezone
+from statistics import mean, median, stdev
 from sqlmodel import Session, select
 from app.db.models import Post, SentimentBucket
 
@@ -31,28 +32,29 @@ def floor_to_hour(dt: datetime) -> datetime:
 
 
 def aggregate_hour(session: Session, hour_start: datetime) -> None:
+def aggregate_hour(session: Session, hour_start: datetime) -> None:
     """
     Recompute sentiment aggregates for a given hour using batch operations.
     
-    Computes the average sentiment for each tracked symbol within a one-hour
+    Computes mean, median, and standard deviation for each tracked symbol within a one-hour
     window and creates or updates SentimentBucket records in batch.
     
     This is called after each ingest cycle to keep aggregations up-to-date.
+    Currently stores mean in avg_sentiment. Median/StdDev can be added to schema later.
     
     Args:
         session: Database session
         hour_start: Start of the hour to aggregate (will be rounded)
         
     Note:
-        MVP implementation: uses simple mean sentiment per symbol.
+        MVP implementation: stores mean sentiment per symbol.
+        Computes median and stdev for future use.
         
         Future enhancements could include:
+        - Add median and stdev fields to schema
         - Weighted sentiment by post engagement (upvotes, replies)
         - Separate weighting for reddit vs threads posts
-        - Robust statistics (median, trimmed mean) instead of mean
     """
-    from sqlalchemy import func, case, cast, Float
-    
     hour_start = floor_to_hour(hour_start)
     hour_end = hour_start.replace(minute=59, second=59, microsecond=999999)
 
@@ -65,19 +67,23 @@ def aggregate_hour(session: Session, hour_start: datetime) -> None:
         )
     ).all()
 
-    # Batch process: group by symbol and calculate aggregates in Python
+    # Batch process: group by symbol and calculate aggregates
     by_sym: dict[str, list[float]] = {}
     for p in posts:
         syms = [s.strip() for s in (p.symbols or "").split(",") if s.strip()]
         for s in syms:
             by_sym.setdefault(s, []).append(float(p.sentiment))
 
-    # Batch upsert buckets
+    # Batch upsert buckets with improved statistics
     symbols_processed = set()
     for sym, vals in by_sym.items():
         symbols_processed.add(sym)
-        avg = sum(vals) / max(1, len(vals))
         post_count = len(vals)
+        avg = mean(vals) if vals else 0.0
+        
+        # Compute additional stats for monitoring (can be stored if schema updated)
+        median_val = median(vals) if vals else 0.0
+        std_dev = stdev(vals) if len(vals) > 1 else 0.0
 
         existing = session.exec(
             select(SentimentBucket).where(

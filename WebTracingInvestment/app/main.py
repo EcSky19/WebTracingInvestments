@@ -3,6 +3,8 @@
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from app.core.logging import setup_logging
 from app.db.session import init_db
 from app.api.routes import router
@@ -47,6 +49,17 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    
+    # Add middleware for compression and CORS
+    app.add_middleware(GZipMiddleware, minimum_size=1000)  # Compress responses > 1KB
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Adjust for production
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
     app.include_router(router)
 
     # Start scheduler in-process with error handling.

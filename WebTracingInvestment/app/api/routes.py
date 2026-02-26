@@ -2,8 +2,8 @@
 
 from datetime import datetime, timedelta, timezone
 import logging
-from fastapi import APIRouter, Query
-from sqlmodel import select
+from fastapi import APIRouter, Query, Response
+from sqlmodel import select, func
 
 from app.db.session import get_session
 from app.db.models import SentimentBucket, Post
@@ -15,20 +15,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/health", response_model=HealthResponse)
-def health() -> HealthResponse:
+def health(response: Response) -> HealthResponse:
     """
     Health check with database status.
     
     Returns ok if database is accessible and has data.
     Useful for monitoring and load balancer health checks.
+    Sets cache headers for 30 second TTL to reduce repeated checks.
     """
     try:
         with get_session() as session:
             # Use COUNT for efficiency instead of loading all records
-            from sqlmodel import func
             post_count = session.query(func.count(Post.id)).scalar() or 0
             bucket_count = session.query(func.count(SentimentBucket.id)).scalar() or 0
             
+        # Cache for 30 seconds - health changes are infrequent
+        response.headers["Cache-Control"] = "public, max-age=30"
+        
         logger.info("Health check passed")
         return HealthResponse(
             ok=True,
@@ -38,6 +41,7 @@ def health() -> HealthResponse:
         )
     except Exception as e:
         logger.error(f"Health check failed: {e}")
+        response.headers["Cache-Control"] = "no-cache"
         return HealthResponse(
             ok=False,
             database="disconnected",
@@ -45,7 +49,7 @@ def health() -> HealthResponse:
         )
 
 @router.get("/sentiment/hourly", response_model=list[BucketOut])
-def hourly(symbol: str | None = None, hours: int = Query(24, gt=0, le=720), limit: int = Query(1000, gt=0, le=10000)) -> list[BucketOut]:
+def hourly(symbol: str | None = None, hours: int = Query(24, gt=0, le=720), limit: int = Query(1000, gt=0, le=10000), response: Response = None) -> list[BucketOut]:
     """
     Returns last N hours of hourly sentiment with pagination.
     
@@ -55,7 +59,7 @@ def hourly(symbol: str | None = None, hours: int = Query(24, gt=0, le=720), limi
         limit: Max results to return (1-10000, default 1000)
     
     Returns:
-        List of hourly sentiment buckets
+        List of hourly sentiment buckets with 5-minute cache TTL
     """
     try:
         now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
@@ -73,14 +77,19 @@ def hourly(symbol: str | None = None, hours: int = Query(24, gt=0, le=720), limi
 
             q = q.limit(limit)  # Add pagination
             rows = session.exec(q).all()
-            logger.debug(f"Retrieved {len(rows)} hourly buckets for {symbol_upper or 'all symbols'}")
-            return [BucketOut(**r.model_dump()) for r in rows]
+            
+        # Cache for 5 minutes - hourly data changes slowly
+        if response:
+            response.headers["Cache-Control"] = "public, max-age=300"
+        
+        logger.debug(f"Retrieved {len(rows)} hourly buckets for {symbol_upper or 'all symbols'}")
+        return [BucketOut(**r.model_dump()) for r in rows]
     except Exception as e:
         logger.error(f"Error fetching hourly sentiment: {e}", exc_info=True)
         raise
 
 @router.get("/sentiment/distribution/{symbol}", response_model=SentimentDistribution)
-def sentiment_distribution(symbol: str, hours: int = Query(24, gt=0, le=720)) -> SentimentDistribution:
+def sentiment_distribution(symbol: str, hours: int = Query(24, gt=0, le=720), response: Response = None) -> SentimentDistribution:
     """
     Returns sentiment distribution breakdown for a symbol.
     
@@ -90,6 +99,7 @@ def sentiment_distribution(symbol: str, hours: int = Query(24, gt=0, le=720)) ->
     
     Returns:
         Sentiment distribution with counts for each sentiment tier
+        Cached for 10 minutes to reduce database load
     """
     try:
         now = datetime.now(tz=timezone.utc)
@@ -112,12 +122,41 @@ def sentiment_distribution(symbol: str, hours: int = Query(24, gt=0, le=720)) ->
                 if symbol in [s.strip() for s in (p.symbols or "").split(",")]
             ]
 
-            # Use aggregation with conditions for efficiency
-            very_negative = sum(1 for p in relevant_posts if p.sentiment <= -0.6)
-            negative = sum(1 for p in relevant_posts if -0.6 < p.sentiment <= -0.2)
-            neutral = sum(1 for p in relevant_posts if -0.2 < p.sentiment < 0.2)
-            positive = sum(1 for p in relevant_posts if 0.2 <= p.sentiment < 0.6)
-            very_positive = sum(1 for p in relevant_posts if p.sentiment >= 0.6)
+            # Single pass aggregation for efficiency
+            very_negative = negative = neutral = positive = very_positive = 0
+            total_sentiment = 0.0
+            
+            for p in relevant_posts:
+                total_sentiment += p.sentiment
+                if p.sentiment <= -0.6:
+                    very_negative += 1
+                elif p.sentiment <= -0.2:
+                    negative += 1
+                elif p.sentiment < 0.2:
+                    neutral += 1
+                elif p.sentiment < 0.6:
+                    positive += 1
+                else:
+                    very_positive += 1
+            
+            avg_sentiment = total_sentiment / len(relevant_posts) if relevant_posts else 0.0
+            
+        # Cache for 10 minutes
+        if response:
+            response.headers["Cache-Control"] = "public, max-age=600"
+
+        logger.debug(f"Distribution for {symbol}: {len(relevant_posts)} posts, avg sentiment {avg_sentiment:.3f}")
+
+        return SentimentDistribution(
+            symbol=symbol,
+            very_negative=very_negative,
+            negative=negative,
+            neutral=neutral,
+            positive=positive,
+            very_positive=very_positive,
+            total_posts=len(relevant_posts),
+            avg_sentiment=avg_sentiment,
+        )
             
             avg_sentiment = sum(p.sentiment for p in relevant_posts) / len(relevant_posts) if relevant_posts else 0.0
 
