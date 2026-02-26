@@ -8,6 +8,8 @@ from sqlmodel import select, func
 from app.db.session import get_session
 from app.db.models import SentimentBucket, Post
 from app.api.schemas import BucketOut, SentimentDistribution, StockSentimentSummary, PostDetail, HealthResponse
+from app.jobs.scheduler import get_ingest_metrics
+from app.services.pipeline import get_pipeline_metrics
 
 __all__ = ["router"]
 
@@ -47,6 +49,41 @@ def health(response: Response) -> HealthResponse:
             database="disconnected",
             error=str(e),
         )
+
+@router.get("/metrics")
+def metrics(response: Response = None) -> dict:
+    """
+    Return system metrics for monitoring and debugging.
+    
+    Includes ingest statistics, pipeline performance, and database state.
+    Useful for observability and troubleshooting ingestion issues.
+    
+    Returns:
+        Dictionary containing ingest metrics and pipeline metrics
+    """
+    try:
+        ingest_metrics = get_ingest_metrics()
+        pipeline_metrics = get_pipeline_metrics()
+        
+        with get_session() as session:
+            total_posts = session.query(func.count(Post.id)).scalar() or 0
+            total_buckets = session.query(func.count(SentimentBucket.id)).scalar() or 0
+        
+        # Cache for 1 minute
+        if response:
+            response.headers["Cache-Control"] = "public, max-age=60"
+        
+        return {
+            "ingest": ingest_metrics,
+            "pipeline": pipeline_metrics,
+            "database": {
+                "total_posts": total_posts,
+                "total_buckets": total_buckets,
+            },
+        }
+    except Exception as e:
+        logger.error(f"Error fetching metrics: {e}")
+        return {"error": str(e), "ingest": {}, "pipeline": {}, "database": {}}
 
 @router.get("/sentiment/hourly", response_model=list[BucketOut])
 def hourly(symbol: str | None = None, hours: int = Query(24, gt=0, le=720), limit: int = Query(1000, gt=0, le=10000), response: Response = None) -> list[BucketOut]:
