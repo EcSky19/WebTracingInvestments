@@ -26,9 +26,20 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    # Initialize logging and database
-    setup_logging()
-    init_db()
+    # Initialize logging and database with error handling
+    try:
+        setup_logging()
+        logger.info("Logging initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize logging: {e}", exc_info=True)
+        raise
+    
+    try:
+        init_db()
+        logger.info("Database initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}", exc_info=True)
+        raise
 
     app = FastAPI(
         title="Social Sentiment MVP",
@@ -38,10 +49,15 @@ def create_app() -> FastAPI:
     )
     app.include_router(router)
 
-    # Start scheduler in-process.
+    # Start scheduler in-process with error handling.
     # Later: move this to a separate worker container (cleaner + scalable).
-    start_scheduler()
-    logger.info("Background scheduler started")
+    try:
+        start_scheduler()
+        logger.info("Background scheduler started successfully")
+    except Exception as e:
+        logger.error(f"Failed to start background scheduler: {e}", exc_info=True)
+        # Don't crash app if scheduler fails - it's background work
+        logger.warning("Continuing without background scheduler")
 
     return app
 

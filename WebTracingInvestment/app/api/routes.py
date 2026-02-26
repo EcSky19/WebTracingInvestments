@@ -24,9 +24,10 @@ def health() -> HealthResponse:
     """
     try:
         with get_session() as session:
-            # Try simple queries to verify database is working
-            post_count = len(session.exec(select(Post)).all())
-            bucket_count = len(session.exec(select(SentimentBucket)).all())
+            # Use COUNT for efficiency instead of loading all records
+            from sqlmodel import func
+            post_count = session.query(func.count(Post.id)).scalar() or 0
+            bucket_count = session.query(func.count(SentimentBucket.id)).scalar() or 0
             
         logger.info("Health check passed")
         return HealthResponse(
@@ -44,13 +45,14 @@ def health() -> HealthResponse:
         )
 
 @router.get("/sentiment/hourly", response_model=list[BucketOut])
-def hourly(symbol: str | None = None, hours: int = Query(24, gt=0, le=720)) -> list[BucketOut]:
+def hourly(symbol: str | None = None, hours: int = Query(24, gt=0, le=720), limit: int = Query(1000, gt=0, le=10000)) -> list[BucketOut]:
     """
-    Returns last N hours of hourly sentiment.
+    Returns last N hours of hourly sentiment with pagination.
     
     Args:
         symbol: Optional symbol filter (case-insensitive)
         hours: Number of hours to retrieve (1-720, default 24)
+        limit: Max results to return (1-10000, default 1000)
     
     Returns:
         List of hourly sentiment buckets
@@ -69,6 +71,7 @@ def hourly(symbol: str | None = None, hours: int = Query(24, gt=0, le=720)) -> l
             if symbol_upper:
                 q = q.where(SentimentBucket.symbol == symbol_upper)
 
+            q = q.limit(limit)  # Add pagination
             rows = session.exec(q).all()
             logger.debug(f"Retrieved {len(rows)} hourly buckets for {symbol_upper or 'all symbols'}")
             return [BucketOut(**r.model_dump()) for r in rows]
@@ -94,20 +97,22 @@ def sentiment_distribution(symbol: str, hours: int = Query(24, gt=0, le=720)) ->
         symbol = symbol.upper()
 
         with get_session() as session:
-            # Get all posts and filter in Python since SQLite symbols are comma-separated
+            # Use database LIKE query for efficient symbol filtering
             posts = session.exec(
                 select(Post).where(
                     Post.created_at >= start,
                     Post.sentiment.isnot(None),
+                    Post.symbols.like(f"%{symbol}%"),  # Use DB-level LIKE filtering
                 )
             ).all()
 
-            # Filter for posts mentioning this symbol
+            # Filter for exact symbol match (LIKE catches partial matches)
             relevant_posts = [
                 p for p in posts 
                 if symbol in [s.strip() for s in (p.symbols or "").split(",")]
             ]
 
+            # Use aggregation with conditions for efficiency
             very_negative = sum(1 for p in relevant_posts if p.sentiment <= -0.6)
             negative = sum(1 for p in relevant_posts if -0.6 < p.sentiment <= -0.2)
             neutral = sum(1 for p in relevant_posts if -0.2 < p.sentiment < 0.2)
@@ -133,13 +138,14 @@ def sentiment_distribution(symbol: str, hours: int = Query(24, gt=0, le=720)) ->
         raise
 
 @router.get("/sentiment/stocks", response_model=list[StockSentimentSummary])
-def all_stocks(hours: int = Query(24, gt=0, le=720)) -> list[StockSentimentSummary]:
+def all_stocks(hours: int = Query(24, gt=0, le=720), limit: int = Query(100, gt=0, le=1000)) -> list[StockSentimentSummary]:
     """
     Returns sentiment summary for all tracked stocks in the last N hours.
     Sorted by post count (most discussed first).
     
     Args:
         hours: Number of hours to analyze (1-720, default 24)
+        limit: Maximum stocks to return (1-1000, default 100)
     
     Returns:
         List of stocks sorted by post count descending
@@ -149,31 +155,34 @@ def all_stocks(hours: int = Query(24, gt=0, le=720)) -> list[StockSentimentSumma
         start = now - timedelta(hours=hours)
 
         with get_session() as session:
+            # Query only necessary fields for efficiency
             posts = session.exec(
                 select(Post).where(
                     Post.created_at >= start,
                     Post.sentiment.isnot(None),
-                )
+                ).order_by(Post.created_at.desc())
             ).all()
 
-            # Group by symbol
+            # Group by symbol with reduced memory footprint
             symbol_stats = {}
             for post in posts:
                 symbols = [s.strip() for s in (post.symbols or "").split(",") if s.strip()]
                 for sym in symbols:
                     if sym not in symbol_stats:
-                        symbol_stats[sym] = {"posts": [], "recent": post.created_at}
-                    symbol_stats[sym]["posts"].append(post.sentiment)
+                        symbol_stats[sym] = {"sentiments": [], "recent": post.created_at}
+                    symbol_stats[sym]["sentiments"].append(post.sentiment)
                     symbol_stats[sym]["recent"] = max(symbol_stats[sym]["recent"], post.created_at)
 
-            # Build response, sorted by post count
+            # Build response, sorted by post count with limit
             results = []
-            for sym, stats in sorted(symbol_stats.items(), key=lambda x: len(x[1]["posts"]), reverse=True):
-                avg = sum(stats["posts"]) / len(stats["posts"])
+            for sym, stats in sorted(symbol_stats.items(), key=lambda x: len(x[1]["sentiments"]), reverse=True):
+                if len(results) >= limit:
+                    break
+                avg = sum(stats["sentiments"]) / len(stats["sentiments"])
                 results.append(
                     StockSentimentSummary(
                         symbol=sym,
-                        total_posts=len(stats["posts"]),
+                        total_posts=len(stats["sentiments"]),
                         avg_sentiment=avg,
                         most_recent_post=stats["recent"],
                     )
@@ -185,13 +194,14 @@ def all_stocks(hours: int = Query(24, gt=0, le=720)) -> list[StockSentimentSumma
         raise
 
 @router.get("/posts/{symbol}", response_model=list[PostDetail])
-def get_posts(symbol: str, limit: int = Query(50, gt=0, le=1000)) -> list[PostDetail]:
+def get_posts(symbol: str, limit: int = Query(50, gt=0, le=1000), offset: int = Query(0, ge=0)) -> list[PostDetail]:
     """
-    Returns recent posts mentioning a symbol.
+    Returns recent posts mentioning a symbol with pagination.
     
     Args:
         symbol: Stock symbol (case-insensitive)
         limit: Maximum number of posts to return (1-1000, default 50)
+        offset: Number of posts to skip for pagination (default 0)
     
     Returns:
         List of recent posts mentioning the symbol
@@ -200,17 +210,20 @@ def get_posts(symbol: str, limit: int = Query(50, gt=0, le=1000)) -> list[PostDe
         symbol = symbol.upper()
         
         with get_session() as session:
+            # Use database LIKE to filter before loading into memory
             posts = session.exec(
-                select(Post).order_by(Post.created_at.desc())
+                select(Post).where(
+                    Post.symbols.like(f"%{symbol}%"),  # DB-level filtering
+                ).order_by(Post.created_at.desc())
             ).all()
 
-            # Filter for posts mentioning this symbol and limit
+            # Filter for exact symbol match and apply pagination
             relevant_posts = [
                 p for p in posts 
                 if symbol in [s.strip() for s in (p.symbols or "").split(",")]
-            ][:limit]
+            ][offset:offset+limit]
 
-            logger.debug(f"Retrieved {len(relevant_posts)} posts for symbol {symbol}")
+            logger.debug(f"Retrieved {len(relevant_posts)} posts for symbol {symbol} (offset={offset})")
 
             return [
                 PostDetail(

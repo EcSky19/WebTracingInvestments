@@ -11,8 +11,8 @@ def detect_symbols(text: str) -> list[str]:
     """
     Detect stock ticker symbols mentioned in text.
     
-    Uses simple but fast substring matching against a pre-built alias map.
-    Text is converted to uppercase and checked for exact matches with known
+    Uses efficient word-boundary regex matching against known aliases.
+    Text is converted to uppercase and checked for matches with known
     company aliases (ticker symbols, company names, product names, CEO names, etc.)
     
     Args:
@@ -22,17 +22,22 @@ def detect_symbols(text: str) -> list[str]:
         List of detected stock symbols (ticker codes like 'TSLA', 'AAPL', etc.)
         
     Note:
-        This is a simple MVP approach. Later upgrades could include:
-        - Word-boundary regex to avoid false positives
+        Uses word boundaries to avoid false positives. Later upgrades:
         - Cashtag detection ($TSLA)
         - Disambiguation (e.g., "Apple" fruit vs Apple Inc.)
     """
     t = text.upper()
-    hits = []
+    hits = set()  # Use set to avoid duplicates
+    
+    # Build a pattern that checks all aliases with word boundaries
     for sym, aliases in ALIAS_MAP.items():
-        if any(a in t for a in aliases):
-            hits.append(sym)
-    return hits
+        for alias in aliases:
+            # Use word boundary regex for accuracy
+            if re.search(r'\b' + re.escape(alias) + r'\b', t):
+                hits.add(sym)
+                break  # Found this symbol, move to next
+    
+    return list(hits)
 
 def clean_text(text: str) -> str:
     """

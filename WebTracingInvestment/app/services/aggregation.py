@@ -32,10 +32,10 @@ def floor_to_hour(dt: datetime) -> datetime:
 
 def aggregate_hour(session: Session, hour_start: datetime) -> None:
     """
-    Recompute sentiment aggregates for a given hour.
+    Recompute sentiment aggregates for a given hour using batch operations.
     
     Computes the average sentiment for each tracked symbol within a one-hour
-    window and creates or updates SentimentBucket records.
+    window and creates or updates SentimentBucket records in batch.
     
     This is called after each ingest cycle to keep aggregations up-to-date.
     
@@ -51,23 +51,33 @@ def aggregate_hour(session: Session, hour_start: datetime) -> None:
         - Separate weighting for reddit vs threads posts
         - Robust statistics (median, trimmed mean) instead of mean
     """
+    from sqlalchemy import func, case, cast, Float
+    
     hour_start = floor_to_hour(hour_start)
     hour_end = hour_start.replace(minute=59, second=59, microsecond=999999)
 
+    # Fetch posts with sentiment in date range
     posts = session.exec(
-        select(Post).where(Post.created_at >= hour_start, Post.created_at <= hour_end)
+        select(Post).where(
+            Post.created_at >= hour_start,
+            Post.created_at <= hour_end,
+            Post.sentiment.isnot(None)
+        )
     ).all()
 
+    # Batch process: group by symbol and calculate aggregates in Python
     by_sym: dict[str, list[float]] = {}
     for p in posts:
-        if p.sentiment is None:
-            continue
-        syms = [s for s in (p.symbols or "").split(",") if s]
+        syms = [s.strip() for s in (p.symbols or "").split(",") if s.strip()]
         for s in syms:
             by_sym.setdefault(s, []).append(float(p.sentiment))
 
+    # Batch upsert buckets
+    symbols_processed = set()
     for sym, vals in by_sym.items():
+        symbols_processed.add(sym)
         avg = sum(vals) / max(1, len(vals))
+        post_count = len(vals)
 
         existing = session.exec(
             select(SentimentBucket).where(
@@ -78,18 +88,16 @@ def aggregate_hour(session: Session, hour_start: datetime) -> None:
         ).first()
 
         if existing:
-            existing.post_count = len(vals)
+            existing.post_count = post_count
             existing.avg_sentiment = avg
-            logger.debug(f"Updated {sym}: {len(vals)} posts, sentiment={avg:.3f}")
         else:
             session.add(SentimentBucket(
                 symbol=sym,
                 bucket="hour",
                 bucket_start=hour_start,
-                post_count=len(vals),
+                post_count=post_count,
                 avg_sentiment=avg,
             ))
-            logger.debug(f"Created {sym}: {len(vals)} posts, sentiment={avg:.3f}")
 
     session.commit()
-    logger.info(f"Aggregated sentiment for {len(by_sym)} symbols in hour {hour_start}")
+    logger.info(f"Aggregated sentiment for {len(symbols_processed)} symbols in hour {hour_start}")

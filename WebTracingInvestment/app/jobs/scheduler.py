@@ -17,7 +17,7 @@ scheduler: BackgroundScheduler | None = None
 
 def run_ingest_once():
     """
-    Pull from sources, push through pipeline.
+    Pull from sources, push through pipeline with improved error handling.
     """
     start_time = datetime.now(tz=timezone.utc)
     logger.info("=== Starting ingest cycle ===")
@@ -29,34 +29,62 @@ def run_ingest_once():
         adapters.append(RedditAdapter(limit=30))
         logger.info("✓ Reddit adapter initialized")
     except Exception as e:
-        logger.warning(f"✗ Reddit adapter failed: {e}")
+        logger.warning(f"✗ Reddit adapter failed to initialize: {e}")
 
     # Threads is no-op unless token/user_id set
-    adapters.append(ThreadsAdapter(limit=30))
+    try:
+        adapters.append(ThreadsAdapter(limit=30))
+    except Exception as e:
+        logger.warning(f"✗ Threads adapter failed to initialize: {e}")
 
     inserted = 0
     total_posts = 0
-    with get_session() as session:
-        for ad in adapters:
-            adapter_name = ad.__class__.__name__
-            adapter_posts = 0
-            try:
-                for item in ad.fetch():
-                    total_posts += 1
-                    adapter_posts += 1
-                    if process_item(session, item):
-                        inserted += 1
-                logger.info(f"[{adapter_name}] Processed {adapter_posts} posts, {inserted} new total")
-            except Exception as e:
-                logger.error(f"[{adapter_name}] Error: {e}")
+    errors_by_adapter = {}
+    
+    try:
+        with get_session() as session:
+            for ad in adapters:
+                adapter_name = ad.__class__.__name__
+                adapter_posts = 0
+                adapter_errors = 0
+                
+                try:
+                    for item in ad.fetch():
+                        total_posts += 1
+                        adapter_posts += 1
+                        try:
+                            if process_item(session, item):
+                                inserted += 1
+                        except Exception as e:
+                            adapter_errors += 1
+                            logger.debug(f"[{adapter_name}] Failed to process item: {e}")
+                            if adapter_errors > 10:  # Circuit breaker: stop after 10 errors
+                                logger.error(f"[{adapter_name}] Too many processing errors, skipping remaining")
+                                break
+                    
+                    if adapter_errors > 0:
+                        errors_by_adapter[adapter_name] = adapter_errors
+                    logger.info(f"[{adapter_name}] Processed {adapter_posts} posts, {inserted} new total, {adapter_errors} errors")
+                except Exception as e:
+                    logger.error(f"[{adapter_name}] Fatal error during fetch: {e}", exc_info=True)
+                    errors_by_adapter[adapter_name] = str(e)
 
-        # After ingest, update current hour aggregate
-        now = datetime.now(tz=timezone.utc)
-        aggregate_hour(session, floor_to_hour(now))
-        logger.info(f"✓ Aggregated sentiment for hour: {floor_to_hour(now)}")
+            # After ingest, update current hour aggregate
+            try:
+                now = datetime.now(tz=timezone.utc)
+                aggregate_hour(session, floor_to_hour(now))
+                logger.info(f"✓ Aggregated sentiment for hour: {floor_to_hour(now)}")
+            except Exception as e:
+                logger.error(f"Failed to aggregate hour: {e}", exc_info=True)
+    
+    except Exception as e:
+        logger.error(f"Fatal error in ingest cycle: {e}", exc_info=True)
 
     elapsed = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
-    logger.info(f"=== Ingest cycle complete: {inserted}/{total_posts} new posts in {elapsed:.2f}s ===")
+    status = f"{inserted}/{total_posts} new posts in {elapsed:.2f}s"
+    if errors_by_adapter:
+        status += f" | Errors: {errors_by_adapter}"
+    logger.info(f"=== Ingest cycle complete: {status} ===")
     return inserted
 
 def start_scheduler() -> BackgroundScheduler:

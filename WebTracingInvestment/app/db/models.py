@@ -48,3 +48,8 @@ class SentimentBucket(SQLModel, table=True):
 
     post_count: int = 0
     avg_sentiment: float = 0.0
+    
+    # Composite index for common query pattern
+    __table_args__ = (
+        Index("ix_sentiment_bucket_composite", "bucket", "bucket_start", "symbol"),
+    )
